@@ -10,3 +10,8 @@ Options:
   -c, --cat  Upload the file as a GZipped concatenated file (default for csv)
   --help     Show this message and exit.
 ```
+
+Installation:
+* Clone Repo
+* Configure HDFS CLI (~/.hdfscli.cfg)
+* Configure IDB (~/idigbio.json)
