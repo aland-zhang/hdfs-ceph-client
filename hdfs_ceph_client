@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+
+import os
+import tempfile
+import tarfile
+import gzip
+import click
+
+from contextlib import closing
+from hdfs import Config
+from idb.helpers.logging import configure
+from idb.helpers.storage import IDigBioStorage
+
+# Configure Debug Logging
+configure(stderr_level=2)
+
+
+class HdfsCephClient(object):
+
+    def __init__(self):
+        self.client = Config().get_client()
+        self.storage = IDigBioStorage(access_key=os.environ.get("CEPH_ACCESS_KEY"), secret_key=os.environ.get("CEPH_SECRET_KEY"))
+
+    def _get_files(self, path):
+        for root, dirs, files in self.client.walk(path):
+            for f in files:
+                yield os.path.join(root, f)
+
+    def _make_cat(self, path):
+        orig_filename = os.path.split(path)[-1]
+        orig_ext = orig_filename.split(".")[-1]
+
+        final_path = orig_filename + ".gz"
+        fd, temp_path = tempfile.mkstemp()
+        with closing(os.fdopen(fd, "w+b")) as tf:
+            with gzip.GzipFile(mode='wb', fileobj=tf) as gzf:
+                for file in self._get_files(path):
+                    if file.endswith(orig_ext):
+                        with self.client.read(file, chunk_size=65536) as reader:
+                            for chunk in reader:
+                                gzf.write(chunk)
+
+        os.rename(temp_path, final_path)
+
+        return final_path
+
+    def _make_tar(self, path):
+        final_path = os.path.split(path)[-1] + ".tar.gz"
+        fd, temp_path = tempfile.mkstemp()
+        with closing(os.fdopen(fd, "w+b")) as tf:
+            with tarfile.open(mode='w|gz', fileobj=tf) as tar:
+                for file in self._get_files(path):
+                    part_fd, part_temp_path = tempfile.mkstemp()
+                    part_tf = os.fdopen(part_fd, "w+b")
+
+                    with self.client.read(file, chunk_size=65536) as reader:
+                        for chunk in reader:
+                            part_tf.write(chunk)
+
+                    part_tf.close()
+
+                    tar.add(part_temp_path, arcname=file)
+
+        os.rename(temp_path, final_path)
+
+        return final_path
+
+    def upload(self, path, mode=None):
+        if mode is None:
+            if path.endswith("csv"):
+                mode = "cat"
+            else:
+                mode = "tar"
+
+        try:
+            if mode == "cat":
+                final_path = self._make_cat(path)
+            else:
+                final_path = self._make_tar(path)
+
+            guoda_path = os.path.join(*(list(os.path.split(path)[:-1]) + [final_path]))
+            k = self.storage.get_key(guoda_path, "guoda")
+            k = self.storage.upload(k, final_path)
+        except Exception as e:
+            os.unlink(final_path)
+            raise e
+
+        os.unlink(final_path)
+
+        return guoda_path
+
+
+@click.command()
+@click.option("-t", "--tar", "mode", flag_value="tar")
+@click.option("-c", "--cat", "mode", flag_value="tar")
+@click.argument("path", type=click.Path())
+def upload(mode, path):
+    hcc = HdfsCephClient()
+    gp = hcc.upload(path, mode=mode)
+
+    print("https://s.idigbio.org/guoda/" + gp)
+
+
+if __name__ == '__main__':
+    upload()
