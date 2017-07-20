@@ -74,6 +74,8 @@ class HdfsCephClient(object):
 
         if path.startswith("hdfs://"):
             path = "/" + "/".join(path.split("/")[3:])
+        elif not path.startswith("/"):
+            path = "/" + path
 
         print(path)
 
@@ -101,13 +103,13 @@ class HdfsCephClient(object):
 
 @click.command()
 @click.option("-t", "--tar", "mode", flag_value="tar", help="Upload the file as a GZipped TAR Archive (default for most files)")
-@click.option("-c", "--cat", "mode", flag_value="tar", help="Upload the file as a GZipped concatenated file (default for csv)")
+@click.option("-c", "--cat", "mode", flag_value="cat", help="Upload the file as a GZipped concatenated file (default for csv)")
 @click.argument("path", type=click.Path())
 def upload(mode, path):
     hcc = HdfsCephClient()
     gp = hcc.upload(path, mode=mode)
 
-    print("https://s.idigbio.org/guoda/" + gp)
+    print("https://s.idigbio.org/guoda" + gp)
 
 
 if __name__ == '__main__':
