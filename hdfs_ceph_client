@@ -72,6 +72,13 @@ class HdfsCephClient(object):
             else:
                 mode = "tar"
 
+        if path.startswith("hdfs://"):
+            path = "/" + "/".join(path.split("/")[3:])
+
+        print(path)
+
+        final_path = None
+
         try:
             if mode == "cat":
                 final_path = self._make_cat(path)
@@ -82,10 +89,12 @@ class HdfsCephClient(object):
             k = self.storage.get_key(guoda_path, "guoda")
             k = self.storage.upload(k, final_path)
         except Exception as e:
-            os.unlink(final_path)
+            if final_path is not None:
+                os.unlink(final_path)
             raise e
 
-        os.unlink(final_path)
+        if final_path is not None:
+            os.unlink(final_path)
 
         return guoda_path
 
