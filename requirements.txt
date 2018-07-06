@@ -1,2 +1,2 @@
 idb
-hdfscli
+hdfs
