@@ -14,6 +14,7 @@ from idb.helpers.storage import IDigBioStorage
 # Configure Debug Logging
 configure(stderr_level=2)
 
+BUCKET = "idigbio-guoda-prod"
 
 class HdfsCephClient(object):
 
@@ -77,25 +78,27 @@ class HdfsCephClient(object):
         elif not path.startswith("/"):
             path = "/" + path
 
-        print(path)
+        print(local)
 
         final_path = None
 
         try:
             if mode == "cat":
                 final_path = self._make_cat(path)
-            else:
+            elif mode == "tar":
                 final_path = self._make_tar(path)
+            else:
+                final_path = path[1:] # take the "/" back off if it's a local file name
 
             guoda_path = os.path.join(*(list(os.path.split(path)[:-1]) + [final_path]))
-            k = self.storage.get_key(guoda_path, "guoda")
+            k = self.storage.get_key(guoda_path, BUCKET)
             k = self.storage.upload(k, final_path)
         except Exception as e:
             if final_path is not None:
                 os.unlink(final_path)
             raise e
 
-        if final_path is not None:
+        if (final_path is not None) and (mode !== "local"):
             os.unlink(final_path)
 
         return guoda_path
@@ -104,12 +107,13 @@ class HdfsCephClient(object):
 @click.command()
 @click.option("-t", "--tar", "mode", flag_value="tar", help="Upload the file as a GZipped TAR Archive (default for most files)")
 @click.option("-c", "--cat", "mode", flag_value="cat", help="Upload the file as a GZipped concatenated file (default for csv)")
+@click.option("-l", "--local", "mode", flag_value="local", help="Upload the file directly from local file system")
 @click.argument("path", type=click.Path())
 def upload(mode, path):
     hcc = HdfsCephClient()
     gp = hcc.upload(path, mode=mode)
 
-    print("https://s.idigbio.org/guoda" + gp)
+    print("https://s.idigbio.org/{0}/{1}".format(BUCKET, gp))
 
 
 if __name__ == '__main__':
