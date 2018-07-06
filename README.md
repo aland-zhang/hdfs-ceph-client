@@ -15,3 +15,15 @@ Installation:
 * Clone Repo
 * Configure HDFS CLI (~/.hdfscli.cfg)
 * Configure IDB (~/idigbio.json)
+
+Example .hdfscli.cfg:
+
+```
+[global]
+default.alias = prod
+
+[prod.alias]
+url = http://hdfs.guoda.bio
+root = /
+user = hdfs
+```
